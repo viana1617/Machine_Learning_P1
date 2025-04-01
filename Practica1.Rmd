@@ -1,0 +1,447 @@
+---
+title: "Práctica 1"
+author: "Pablo Viaña Y Jorge Medina"
+date: 
+output:
+  prettydoc::html_pretty:
+    toc: true
+    toc_depth: 3
+    number_selections: true
+    theme: architect
+    higlight: tango
+
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = F, message = F)
+```
+# EDA
+La primera práctica de aprendizaje automático consiste en elaborar cuatro modelos de forma diferente para predecir,mediante el entrenamiento de los mismos y según unas variables como age, total_bilirubin, total_protein, si una persona tendrá una enfermedad o no. Para ello contamos con una base de datos con 583 elementos de pacientes, y de los que ya sabemos si tienen la enfermedad o no.
+
+
+El primer paso que realizaremos será el EDA, un análisis exploratorio de los datos. La finalidad de este proceso
+consiste en poder identificar patrones, detectar valores atípicos, valores faltantes...,de forma que cuando vayamos a
+continuar con los siguientes pasos, tengamos una información previa de nuestros datos.
+
+Alguna de la información que nos proporciona skimr y dataExplorer, librerias que elaboran el EDA, son análisis de correlaciones,
+diagramas de cajas, histogramas o boxplots, que analizaremos a continuación.
+
+Lo primero que observamos en el informe que obtenemos, es una información general acerca del número total de filas, columnas,
+valores faltantes (no se registra ningún valor faltante), número de filas completas, cuantas columnas son discretas y cuantas son continuas (analizado posteriormente), el número total de observaciones y la memoria que ocupa. A esta información también le acompaña unos gráficos en los que podemos analizar visualmente parte de esta información.
+
+La siguiente parte parte del informe, analiza como se distribuyen las variables en unos histogramas.
+Podemos ver que la mayor parte de la población incluida en nuestra base de datos está comprendida entre los 30 y 60 años, es decir,
+contamos con gente de mediana edad, y parece seguir una distribución normal.
+Otras variables que también parecen presentar un aspecto normal son albumin_globulin_ratio,albumin y total_protein.
+Por otra parte, el resto de variables acumulan la mayor parte de los datos en la parter izquierda del histograma,
+encontrandose algunos atípicos en las partes derechas de los mismos.
+
+Seguidamente, en el informe nos encontramos con dos diagramas de cajas en los que vemos como se distribuyen las variables discretas. Observamos que tenemos un mayor número de hombres en nuestros datos que de mujeres, y respecto a la variable
+diseased, contamos con mayor casos en los que la persona tiene la enfermedad, circunstancia que será analizada posteriormente.
+Además, contamos con más casos de hombres que tienen la enfermedad que de mujeres que la poseen, según vemos en el gráfico
+posterior.
+
+En los gráficos qq-plot, vemos como las variables que anteriormente hemos visto en los histogramas que tenían una distribución
+normal, nos lo corroboran ya que los cuantiles de los datos son consistentes con los cuantiles esperados de una distribución normal. Por otra parte, aquellas variables que acumulaban sus datos en la parte izquierda del histograma,
+nos siguen esta distribución normal.
+Sin embargo, en la variable age, vemos que aunque los datos de personas de mediana edad sí se adaptan bien a la distribución,
+los de las personas más mayores y más jóvenes se podrían considerar más atípicos.
+
+
+En el gráfico de correlaciones, vemos como las variables continuas que presentan una mayor correlación son, como sería esperable,
+direct_bilirubin con 	total_bilirubin, albumin_globulin_ratio con albumin y aspartate_transaminase con alanine_transaminase, además de albumin con total_protein. Las variables menos correladas serían albumin_globulin_ratio con aspartate_transaminase o 
+alanine_transaminase con albumin_globulin_ratio. De forma general, se podría decir que las correlaciones entre variables 
+no son excesivamente altas.
+
+
+Por último, observamos como en los boxplots que se generan a partir de si la variable diseased toma el valor "yes" o "no",
+las variables que no seguían una distribución normal tienen un gran número de atípicos en la parte de derecha, mientras que las variables que sí seguían una distribución normal presentan un número muy bajo de atípicos.
+
+
+
+
+```{r}
+library(mlr3data)
+data("ilpd", package = "mlr3data")
+```
+
+```{r}
+library(skimr)
+skim(ilpd)
+str(ilpd)
+```
+
+```{r}
+library(DataExplorer)
+create_report(ilpd, y = "diseased")
+```
+
+Adjuntamos el Reporte en otro pdf.
+
+```{r}
+enfermos=ilpd[ilpd$diseased=="yes",]
+```
+
+
+
+
+El número de instancias con el que contamos son 583 observaciones.
+Tenemos un total de 416 casos en los cuales el paciente esta enfermo del conjunto de los datos, 
+con lo cual no tenemos completamnente compensada. Tenemos un gran número de casos 
+que son positivos en nuestros datos, con lo cual tenemos suficientes datos realizar el modelo.
+Debido a la proporción de datos que tenemos, con una proporción mayor con la variable diseased= "yes",
+al entrenar el modelo, será más probable que detecte la enfermedad en gente que no la tiene que el caso opuesto, es decir,
+que no detecte la enfermedad en alguien que sí la tiene.
+
+
+
+Los atributos con los que contamos son 11 variables, 2 son discretas 
+y 9 son continuas.Las variables discretas son gender y deseased, que toman valores de hombre o mujer
+en el caso de gender y enfermo o no enfermo en el caso de deseased.
+Dentro de las variables continuas, tenemos variables como age, alkaline_phosphatase,
+alanine_transaminase y aspartate_transaminase que son valores enteros, mientras 
+que total_bilirubin,direct_bilirubin, total_protein,albumin,albumin_globulin_ratio
+son valores reales.
+
+En cuanto a la existencia de NA es nuestros datos, es decir, valores faltantes,
+no se da el caso en nuestra base de datos. Esto es positivo ya que de esta manera, no será necesario 
+emplear ningún método estadístico que rellene esos valores faltantes.
+
+En cuanto a la variable respuesta, en nuestro caso es si el paciente presenta la 
+enfermedad o no la presenta. Es una variable biclese.
+
+Por útimo,nos encontramos ante un problema de clasificación supervisada, ya que contamos con 
+la información tiene la enfermedad o no previamente.
+
+
+
+
+
+
+
+
+
+
+
+
+# MODELO CON RPART EN R
+
+El primer modelo que vamos a realizar es el rpart con R.
+```{r}
+library(rpart)
+library(caret)
+library(tidyverse)
+set.seed(1)
+indices_train=sample(1:nrow(ilpd),nrow(ilpd)*3/4,replace = F)
+num=c(1:583)
+indices_test=num[-c(match(indices_train,num))]
+ilpd_train=ilpd[indices_train,]
+ilpd_test=ilpd[-indices_train,]
+
+for (i in 1:10){
+  rpart_model1=rpart(diseased~ ., ilpd_train,maxdepth=i)
+  rpart_test1 <- predict(rpart_model1, ilpd_test,type = "class")
+  (matriz_confusion1<-confusionMatrix(rpart_test1,ilpd_test[["diseased"]]))
+  print(sum(diag(matriz_confusion1$table))/146)
+}
+```
+
+Tras instalar las liberias, separamos los datos en entrenamiento y test, con una proporción 
+de 3/4 la muestra de entrenamiento y 1/4 la muestra de test.
+
+Posteriormente, realizamos el modelo y usamos un bucle para comprobar como varía la precisión del modelo
+según cambia el hiperparámtro(profundidad del árbol), obteniendo el valor más alto con el valor del 
+hiperparámetro igual a 4.
+
+```{r}
+rpart_model <- rpart(diseased ~ ., ilpd_train,maxdepth=4)
+rpart_test <- predict(rpart_model, ilpd_test,type = "class")
+(matriz_confusion1<-confusionMatrix(rpart_test,ilpd_test[["diseased"]]))
+```
+
+Realizamos la matriz de confusión para ese valor 10. Además de una precisión del 74.66%,
+obtenemos la sensibilidad del 96.33%, es decir, el modelo es capaz de identificar correctamente el 96.33% delos casos positivos en el conjunto de datos. Por otra parte, specificity nos da la información del caso inverso, es decir,
+la proporción de casos negativos reales que el modelo ha identificado correctamente como negativos.
+
+Por tanto, teniendo en cuenta los valores obtenidos, el modelo habrá detectado como negativos muchos casos que en realidad no lo son. Esta situción, aunque no es óptima, es "menos mala", ya que lo que sí supondría un problema grave es no detectar un gran 
+número de casos en los que la enfermedad sí esta presente.
+
+
+```{r}
+library(rpart)
+library(rpart.plot)
+
+
+rpart.plot(rpart_model, box.palette = "auto", shadow.col = "blue",nn=TRUE)
+```
+
+Por último, graficamos el árbol con el hiperparámtro 4. Observamos como la primera distinción es en funcion del nivel de bilirrubina separando los en mayores e iguales y menores a 1.7, posteriormente el modelo se va haciendo mas complejo al añadir variables e ir distinguiendo en funcion de ciertos valores.
+
+
+# MODELO CON RPART Y MLR CON RESAMPLE
+
+Ahora vamos a realizar el modelo con mlr3(rpart), y aplicando resample.
+
+```{r}
+library(mlr3)
+library(mlr3learners)
+library(mlr3extralearners)
+```
+
+Lo primero, crearemos la tarea de regresión
+
+```{r}
+ilpd_task <- as_task_classif(ilpd, target="diseased", id="enfermedad",type="class")
+
+```
+
+Ahora, aplicamos resample para entrenar la tarea mediante el remuestreo de datos, con un ratio de 3/4 en la muestra 
+de entrenamiento al igual que antes.
+
+
+```{r}
+res_desc <- rsmp("holdout", ratio=3/4)
+set.seed(1)
+res_desc$instantiate(ilpd_task)
+```
+
+Posteriormente, aplicamos un buble para analizar la precisión en función del hiperparámetro.
+
+```{r}
+for(k in 1:10){
+  learner = lrn("classif.rpart", maxdepth=k)
+res_desc <- rsmp("holdout", ratio=3/4)
+set.seed(1)
+res_desc$instantiate(ilpd_task)
+tree_resample <- resample(task=ilpd_task, 
+                          learner=learner, 
+                          resampling=res_desc,
+                          store_models = TRUE)
+measure = msr("classif.acc")
+error = tree_resample$score(measure)[, .(task_id, learner_id, iteration, classif.acc)]
+print(error)
+}
+```
+Tras ver todas las precisiones, obtenemos los mayores valores con k=1, k=3 y k=4, y como en el primer modelo hemos elegido una k=4, tomaremos esta también de referencia para comparar de la mejor manera posible.
+
+
+Definimos el método de aprendizaje
+
+```{r}
+learner = lrn("classif.rpart", maxdepth=4)
+res_desc <- rsmp("holdout", ratio=3/4)
+set.seed(1)
+res_desc$instantiate(ilpd_task)
+tree_resample <- resample(task=ilpd_task, 
+                          learner=learner, 
+                          resampling=res_desc,
+                          store_models = TRUE)
+measure = msr("classif.acc")
+acc = tree_resample$score(measure)[, .(task_id, learner_id, iteration, classif.acc)]
+print(acc)
+```
+Obtenemos la precision del 74.65%
+Por último, obtenemos el error.
+
+
+
+
+Visualizamos el modelo
+
+```{r}
+tree_learner <-tree_resample$learners[[1]]
+tree_learner$model
+
+```
+
+```{r}
+library(rpart)
+library(rpart.plot)
+
+rpart.plot(tree_learner$model, box.palette = "auto", shadow.col = "blue",nn=TRUE)
+```
+
+Y por último obtenemos el gráfico de árbol del modelo habiendo ajustado el hiperparámetro k=4, siendo igual al obtenido anteriormente.
+
+
+
+
+
+# MODELO CON C50 Y R
+Lo primero cargamos las librerías necesarias para realizar el modelo c50.
+Separamos en muestras de entrenamiento y test, y obtenemos el resumen del modelo c50.
+Aplicamos el algoritmo en todas las columnas excepto en la 11, que es la variable diseased que queremos predecir.
+
+```{r}
+library(C50)
+library(caret)
+library(tidyverse)
+
+
+set.seed(1)
+indices_train1=sample(1:nrow(ilpd),nrow(ilpd)*3/4,replace = F)
+ilpd_train1=ilpd[indices_train1,]
+ilpd_test1=ilpd[-indices_train1,]
+
+modeloc50 <- C5.0(ilpd_train1[-11], ilpd_train1$diseased) 
+summary(modeloc50)
+```
+
+Con este modelo obtenemos un error del 14.4% en la predicción.
+
+
+Ahora evaluamos del modelo con la muestra de test.
+
+```{r}
+data_predicted <- predict(modeloc50, ilpd_test1)
+confusionMatrix(data = data_predicted, reference = ilpd_test1$diseased, positive = "yes")
+```
+
+
+Hemos obtenido una exactitud del 69.18%, con un error del 30.82%.
+Esta cifra es algo mayor que la obtenida al ajustar el modelo al dataset de training, lo cual era esperable. 
+Este modelo tiene una sensibilidad del 77.98%. Es decir, somos capaces de predecir el 77.98% de los pacientes que van a tener la enfermedad. 
+
+
+## MEJORA DEL MODELO
+Para ello haremos uso del concepto de Boosting. El Boosting se basa en la noción de que al combinar una serie de learners con bajo rendimiento, se puede crear un equipo que sea mucho más fuerte que cualquiera de los learners solos.  El uso de una combinación de varios learners con fortalezas y debilidades complementarias puede, por lo tanto, mejorar la precisión de un clasificador. La función C5.0 () facilita agregar el boosting a nuestro árbol de decisión C5.0.
+
+```{r}
+modeloc50_1 <- C5.0(ilpd_train1[-11], ilpd_train1$diseased, trials =10) 
+data_predicted2 <- predict(modeloc50_1, ilpd_test1)
+confusionMatrix(data = data_predicted2, reference = ilpd_test1$diseased, positive = "yes")
+```
+
+Mejoramos la precisión del modelo, consiguiendo un 72.6%, a costa de reducir la sensibilidad del modelo a un 86.24%.
+En nuestro caso particular, igual no sería lo apropiado, ya que gente que sí que tiene la enfermedad no sería catalogada como enferma.
+
+
+## MATRIZ DE COSTE
+
+Ahora ajustaremos el modelo para obtener la mayor sensibilidad posible, ya que creemos que es lo más adecuado para nuestro caso.
+
+```{r}
+matrix_dimensions <- list(c("yes", "no"), c("yes", "no"))
+names(matrix_dimensions) <- c("prediction", "reference")
+error_cost <- matrix(c(0, 4, 1, 0), nrow = 2, dimnames = matrix_dimensions)
+error_cost
+modeloc50_costs <- C5.0(ilpd_train1[-11], ilpd_train1$diseased, costs = error_cost) 
+data_predicted_costs <- predict(modeloc50_costs, ilpd_test1)
+confusionMatrix(data = data_predicted_costs, reference = ilpd_test$diseased, positive = "yes")
+```
+
+Con este cambio hemos variado la distribución de los errores. 
+Ha aumentado la sensibilidad a 1, por lo que desaparecerian los falsos negativos y aumentaria la precision a 74.66%.
+
+
+
+# MODELO CON C50 Y MLR CON RESAMPLE
+
+Por último, realizaremos el cuarto modelo con c5.0 y mlr, siguiendo los mismos pasos que el anterior modelo c5.0
+La diferencia será que las variables integer las convertiremos a numeric.
+
+```{r}
+learnerc50mlr <- lrn("classif.C50")
+```
+
+
+
+
+```{r}
+ilpd$age = as.numeric(ilpd$age)
+
+ilpd$alanine_transaminase = as.numeric(ilpd$alanine_transaminase)
+
+ilpd$alkaline_phosphatase = as.numeric(ilpd$alkaline_phosphatase)
+
+ilpd$aspartate_transaminase = as.numeric(ilpd$aspartate_transaminase)
+
+task <- mlr3::as_task_classif(ilpd,target = "diseased",id="Enfermedad")
+task$print()
+```
+
+
+```{r}
+res_desc <- rsmp("holdout", ratio=3/4)
+set.seed(1)
+res_desc$instantiate(task)
+```
+
+
+```{r}
+tree_resample2 <- resample(task=task, 
+                          learner=learnerc50mlr, 
+                          resampling=res_desc,
+                          store_models = TRUE)
+```
+
+```{r}
+measure = msr("classif.acc")
+accuracy = tree_resample2$score(measure)[, .(task_id, learner_id, iteration, classif.acc)]
+print(accuracy)
+
+```
+
+Obtenemos una precisión del 69.17%.
+
+
+
+
+
+
+
+# CONCLUSIONES 
+## DIFERENCIAS FUNDAMENTALES ENTRE RPART Y C50
+Si hablamos de las precisiones, obtenemos un mayor valor en rpart siendo esta del 74.65% frente al 69.17% del modelo c50. Sin embargo, el modelo c50 nos brinda la oportunidad de mejorar esta precisión a traves de los trials, haciendo asi que la precision aumente hasta el 74.65%. Por otro lado, rpart es algo más complejo ya que permite el manejo de los hiperparámetros mientras que el c50 no.
+
+
+
+## DIFERENCIAS ENTRE R Y MLR
+La gran diferencia entre R y MLR es la sencillez del código, siendo esta mucho mayor en el MLR, ya que al aplicar el learner muchos argumentos van implícitos en este, debiendo cambiar solo el método a emplear. Por otro lado, en el caso de R debemos definir cada parámetro de forma manual haciendo el proceso mucho mas laborioso.
+
+
+
+## TABLA PREDICCIONES
+```{r}
+(datos <- data.frame(
+  Modelo = c("Rpart en R", "Rpart en MLR", "C50 en R Mejorado","C50 en R", "C50 en MLR"),
+  Precision = c(0.7465753, 0.7465753, 0.7466, 0.6917808,0.6917808)))
+```
+Mostrando las diferentes precisiones en función del método empleado, observamos como los valores obtenidos tanto para el rpart como para el c50 son iguales independientemente de si son en R o MLR ya que el método es el mismo simplemente cambia la manera de escribir y ejecutar el código. Destacamos también, la posibilidad que nos brinda la librería c50 para poder mejorar la precision y poder alcanzar al modelo rpart.
+
+
+## INDICES
+```{r}
+indices_train[c(1:5)]
+indices_test[c(1:5)]
+res_desc$instance$train[c(1:5)]
+res_desc$instance$test[c(1:5)]
+```
+Observamos como los 5 primeros indices test si son los mismos, mientras que los indices train de R son valores muy altos por lo que probablemente se encuentren desordenados.
+```{r}
+sort(indices_train)[c(1:5)]
+res_desc$instance$train[c(1:5)]
+```
+Demostramos como al ordenarlos en orden ascendente obtenemos los mismos 5 primeros valores para R y MLR.
+
+
+## PREDICCIONES
+```{r}
+rpart_test[c(1:5)]
+tree_resample$prediction()$response[c(1:5)]
+tree_resample$predictions()
+
+
+data_predicted[c(1:5)]
+tree_resample2$prediction()$response[c(1:5)]
+tree_resample2$predictions()
+```
+Vemos como las 2 predicciones de rpart son iguales siendo correctas 4 de las 5. Al haber aplicado el rpart en los 2 casos el modelo de predicción es el mismo. Esta proporcion de aciertos se puede considerar dentro de lo esperable ya que los valores de la precisión rondan un 70/75%.
+Por otro lado, las 2 predicciones de c50 son iguales siendo en este caso correctas solo 3 de las 5, demostrando asi en una pequeña muestra que la precision del c50 es algo inferior.
+
+# BIBLIOGRAFÍA
+https://rpubs.com/DavidGS/c50
+
+https://mlr3extralearners.mlr-org.com/articles/learners/list_learners.html
+
+https://mlr3.mlr-org.com/
